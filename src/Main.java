@@ -464,6 +464,10 @@ class DataBaseTXTv2 extends GlobalVariables {
         for (String x : userRoleLogins.get("client")) {
             /* deleteFile(x) */ createFile(x);
 
+            if (x.equals("client1")){
+                writeFileToPaidProcedures(x, "Бассейн", "4000 сом", "Вторник", "09:00", "2025.05.19");
+            }
+
             readFile(x);
         }
     }
@@ -478,6 +482,23 @@ class DataBaseTXTv2 extends GlobalVariables {
 
         } catch (IOException e) {
             System.out.println("Ошибка при создании файла");
+        }
+    }
+
+    public static void writeFileToPaidProcedures(String login, String title, String cost, String weekDay, String time, String date) {
+        String line = title + " " + cost + " " + weekDay + " " + time + " " + date;
+
+        try {
+            FileWriter fileWriter = new FileWriter(login + "PaidProcedures.txt");
+            BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
+
+            bufferedWriter.write(line);
+            bufferedWriter.newLine();
+
+            bufferedWriter.close();
+
+        } catch (IOException e) {
+            System.out.println("Ошибка при записи в файл");
         }
     }
 
@@ -523,14 +544,12 @@ class DataBaseTXTv2 extends GlobalVariables {
                     paidProcedureTitleClients.get(title).add(login);
                 }
 
-                if (paidProcedureTitleCount.get(title) == null) {
-                    paidProcedureTitleCount.put(title, 1);
+                if (paidProcedureTitleCount.get(login) == null){
+                    paidProcedureTitleCount.put(login, 1);
                 }
-                else {
-                    paidProcedureTitleCount.put(title, paidProcedureTitleCount.get(title) + 1);
+                else{
+                    paidProcedureTitleCount.put(login, paidProcedureTitleCount.get(login) + 1);
                 }
-
-
             }
             bufferedReader.close();
 
@@ -1052,6 +1071,13 @@ class Personal extends GlobalVariables {
             paidProcedureLists.get(login).add(title + " " + procedureTitleCost.get(title) + ".00 сом " + paidProcedureWeekDayAndTimeDate);
         }
 
+        if (paidProcedureTitleCount.get(login) == null){
+            paidProcedureTitleCount.put(login, 1);
+        }
+        else{
+            paidProcedureTitleCount.put(login, paidProcedureTitleCount.get(login) + 1);
+        }
+
         if (paidProcedureTitleClients.get(title) == null){
             ArrayList <String> AL = new ArrayList<>();
             AL.add(login);
@@ -1262,7 +1288,7 @@ class Director extends GlobalVariables {
         String sql = "DELETE FROM users WHERE login = ?";
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, login);
 
             pstmt.executeUpdate();
@@ -1279,8 +1305,8 @@ class Director extends GlobalVariables {
             String sql2 = "DELETE FROM clients WHERE login = ?";
 
             try (Connection conn = DriverManager.getConnection(DB_URL);
-                 PreparedStatement pstmt = conn.prepareStatement(sql2)) {
-                pstmt.setString(1, "login");
+                PreparedStatement pstmt = conn.prepareStatement(sql2)) {
+                pstmt.setString(1, login);
 
                 pstmt.executeUpdate();
 
