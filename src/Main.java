@@ -116,6 +116,7 @@ class DataBaseSQL extends GlobalVariables{
             insertDataMethods.insertDataToUsers("director", "director1", "dir1");
             insertDataMethods.insertDataToUsers("manager", "manager1", "mar1");
             insertDataMethods.insertDataToUsers("client", "client1", "clt1");
+            insertDataMethods.insertDataToUsers("client", "client2", "clt2");
 
             insertDataMethods.insertDataToProcedures("Массаж", 2000);
             insertDataMethods.insertDataToProcedures("Йога", 5000);
@@ -240,7 +241,6 @@ class DataBaseSQL extends GlobalVariables{
                     AL.add(login);
 
                     userRoleLogins.put(role, AL);
-                    userRoleLogins.get(role).add(login);
                 }
                 else{
                     userRoleLogins.get(role).add(login);
@@ -457,7 +457,6 @@ class DataBaseTXT extends GlobalVariables {
 class DataBaseTXTv2 extends GlobalVariables {
     public static void dataBaseTXTv2(){
         for (String x : userRoleLogins.get("client")) {
-
             /* deleteFile(x) */ createFile(x);
 
             readFile(x);
@@ -477,7 +476,7 @@ class DataBaseTXTv2 extends GlobalVariables {
         }
     }
 
-    public static void readFile(String login){
+    private static void readFile(String login){
         try {
             FileReader fileReader = new FileReader(login + "PaidProcedures.txt");
             BufferedReader bufferedReader = new BufferedReader(fileReader);
@@ -673,6 +672,56 @@ class similarUserMethods extends DataBaseSQL {
         }
         System.out.println("------------------------");
     }
+
+    public static void listOfClients(){
+        String sql = "SELECT * FROM clients";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            System.out.println("Список посетителей: ");
+
+            while (rs.next()) {
+                String login = rs.getString("login");
+                String name = rs.getString("name");
+                String surname = rs.getString("surname");
+
+                System.out.println(login + " " + name + " " + surname);
+            }
+        } catch (SQLException e) {
+            System.err.println("Ошибка при чтении данных: " + e.getMessage());
+        }
+    }
+
+    public static void clientPaymentHistory(){
+        Scanner scan = new Scanner(System.in);
+        String login;
+
+        while (true) {
+            System.out.print("\nВведите логин посетителя, которого хотите найти: ");
+            login = scan.next();
+
+            if (clientLoginId.get(login) != null){
+                break;
+            }
+            System.out.println("Посетитель с логином '" + login + "' не найден, повторите.");
+        }
+
+        try {
+            FileReader fileReader = new FileReader(login + "PaidProcedures.txt");
+            BufferedReader bufferedReader = new BufferedReader(fileReader);
+
+            String line;
+
+            System.out.println("История оплаты посетителя " + login + ":");
+            while ((line = bufferedReader.readLine()) != null) {
+                System.out.println(line);
+            }
+            bufferedReader.close();
+
+        } catch (IOException e) {
+            System.out.println("Ошибка при чтении файла");
+        }
+    }
 }
 
 public class Main extends GlobalVariables{
@@ -704,6 +753,7 @@ public class Main extends GlobalVariables{
                 Personal.personal();
                 break;
             case "director":
+                Director.director();
                 break;
             case "manager":
                 break;
@@ -751,7 +801,7 @@ class SignIn extends GlobalVariables {
         String password = scan.next();
 
         if (!loginPasswordProof(login, password)){
-            System.out.println("Неправильный логин или пароль.");
+            System.out.println("\nНеправильный логин или пароль.");
             System.exit(0);
         }
         return login;
@@ -918,5 +968,201 @@ class Personal extends GlobalVariables {
         System.out.println("Стоимость процедуры: " + procedureTitleCost.get(title) + ".00 сом");
         System.out.println("Количество записанных посетителей: " +
                 (paidProcedureLogins.get(title) == null ? 0 : paidProcedureLogins.get(title).size()));
+    }
+}
+
+class Director extends GlobalVariables {
+    public static void director(){
+        Scanner scan = new Scanner(System.in);
+        System.out.println("\nПриветствую дорогой Директор!");
+
+        boolean running = true;
+        boolean anyKey = false;
+
+        while (running){
+            similarUserMethods.anyKeyMethod(anyKey);
+            anyKey = true;
+
+            System.out.println("\nМеню директора:");
+
+            System.out.println("1. Показать список посетителей.");
+            System.out.println("2. Найти посетителя.");
+            System.out.println("3. Добавить пользователя.");
+            System.out.println("4. Удалить пользователя.");
+            System.out.println("5. Показать список процедур.");
+            System.out.println("6. Показать все процедуры.");
+            System.out.println("7. Показать расписание к процедурам.");
+            System.out.println("8. Показать историю оплаты посетителя.");
+            System.out.println("0. Выход.");
+
+            System.out.print("Ваш выбор: ");
+
+            switch (scan.next()){
+                case "1":
+                    similarUserMethods.listOfClients();
+                    break;
+                case "2":
+                    similarUserMethods.searchClientOrMyInfo("", true);
+                    break;
+                case "3":
+                    addUser();
+                    break;
+                case "4":
+                    deleteUser();
+                    break;
+                case "5":
+                    similarUserMethods.listOfProcedures();
+                    break;
+                case "6":
+                    similarUserMethods.allProcedures();
+                    break;
+                case "7":
+                    similarUserMethods.procedureSchedule();
+                    break;
+                case "8":
+                    similarUserMethods.clientPaymentHistory();
+                    break;
+                case "0":
+                    running = false;
+                    System.out.println("\nПрограмма завершена, мы будем рады вашему возвращению!");
+                    break;
+                default:
+                    System.out.println("\nНеверный выбор, повторите.");
+            }
+        }
+    }
+
+    private static void addUser(){
+        Scanner scan = new Scanner(System.in);
+
+        String role = SignIn.role();
+        String login;
+
+        while (true){
+            System.out.print("\nПридумайте новый логин: ");
+            login = scan.next();
+
+            if (userLoginRole.get(login) == null){
+                break;
+            }
+            System.out.println("Логин '" + login + "' уже существует, повторите.");
+        }
+        String password;
+
+        while (true){
+            System.out.println("\nРазмер пароля должен быть больше 4 символов");
+            System.out.print("Придумайте новый пароль: ");
+            password = scan.next();
+
+            if (password.length() >= 4){
+                break;
+            }
+            System.out.println("Пароль не удовлетворяет условием, повторите.");
+        }
+
+        insertDataMethods.insertDataToUsers(role, login, password);
+
+        userLoginRole.put(login, role);
+        userRoleLogins.get(role).add(login);
+        userLoginPassword.put(login, password);
+
+        if (role.equals("client")){
+            System.out.println("\nВы добавляете посетителя, поэтому введите информацию о данном посетителе.");
+
+            System.out.print("Имя: ");
+            String name = scan.next();
+
+            System.out.print("Фамилия: ");
+            String surname = scan.next();
+
+            System.out.print("Рост: ");
+            int height = scan.nextInt();
+
+            System.out.print("Вес: ");
+            int weight = scan.nextInt();
+
+            System.out.print("Группа крови: ");
+            int bloodType = scan.nextInt();
+
+            System.out.print("Дата рождения: ");
+            String dateOfBirth = scan.next();
+
+            insertDataMethods.insertDataToClients(login, name, surname, height, weight, bloodType, dateOfBirth);
+
+            clientLoginId.put(login, userRoleLogins.get(role).size());
+        }
+
+        System.out.println("\nПользователь успешно добавлен!");
+    }
+
+    private static void deleteUser(){
+        Scanner scan = new Scanner(System.in);
+
+        boolean running = true;
+        String role = "";
+
+        while (running) {
+            running = false;
+
+            System.out.println("\npersonal/director/manager/client");
+            System.out.print("Введите тип аккаунта пользователя которого хотите удалить: ");
+
+            role = scan.next();
+
+            switch (role){
+                case "personal": break;
+                case "director": break;
+                case "manager": break;
+                case "client": break;
+                default:
+                    running = true;
+                    System.out.println("Неправильный тип аккаунта, повторите.");
+            }
+        }
+        String login;
+
+        while (true){
+            System.out.print("\nВведите логин пользователя: ");
+            login = scan.next();
+
+            if (userLoginRole.get(login) != null){
+                break;
+            }
+            System.out.println("Логин '" + login + "' не найден, повторите.");
+        }
+
+        String sql = "DELETE FROM users WHERE login = ?";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, login);
+
+            pstmt.executeUpdate();
+
+        } catch (SQLException e) {
+            System.out.println("Ошибка при удалении данных: " + e.getMessage());
+        }
+
+        userLoginRole.remove(login);
+        userRoleLogins.get(role).remove(login);
+        userLoginPassword.remove(login);
+
+        if (role.equals("client")) {
+            String sql2 = "DELETE FROM clients WHERE login = ?";
+
+            try (Connection conn = DriverManager.getConnection(DB_URL);
+                 PreparedStatement pstmt = conn.prepareStatement(sql2)) {
+                pstmt.setString(1, "login");
+
+                pstmt.executeUpdate();
+
+            } catch (SQLException e) {
+                System.out.println("Ошибка при удалении данных: " + e.getMessage());
+            }
+
+            clientLoginId.remove(login);
+        }
+
+        System.out.println("\nПользователь успешно удалён!");
     }
 }
