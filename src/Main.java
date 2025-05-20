@@ -9,7 +9,7 @@ class GlobalVariables {
 
     public static HashMap <String, String> userLoginPassword = new HashMap<>();
 
-    public static HashMap <String, Integer> procedureTitleId = new HashMap<>();
+    public static HashMap <String, Integer> procedureTitleCost = new HashMap<>();
 
     public static HashMap <String, Integer> clientLoginId = new HashMap<>();
 
@@ -28,6 +28,10 @@ class GlobalVariables {
         weekDays.add("Четверг");
         weekDays.add("Пятница");
     }
+
+    public static String currentRole, currentLogin;
+
+    public static HashMap <String, ArrayList <String> > paidProcedureList = new HashMap<>();
 }
 
 class insertDataMethods extends DataBaseSQL {
@@ -53,7 +57,7 @@ class insertDataMethods extends DataBaseSQL {
     public static void insertDataToProcedures(String title, int cost) {
         String sql = "INSERT INTO procedures(title, cost) VALUES(?, ?)";
 
-        if (procedureTitleId.get(title) == null) {
+        if (procedureTitleCost.get(title) == null) {
             try (Connection conn = DriverManager.getConnection(DB_URL);
                  PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -246,10 +250,10 @@ class DataBaseSQL extends GlobalVariables {
              ResultSet rs = stmt.executeQuery(sql)) {
 
             while (rs.next()) {
-                int id = rs.getInt("id");
                 String title = rs.getString("title");
+                int cost = rs.getInt("cost");
 
-                procedureTitleId.put(title, id);
+                procedureTitleCost.put(title, cost);
             }
         } catch (SQLException e) {
             System.err.println("Ошибка при чтении данных: " + e.getMessage());
@@ -277,9 +281,8 @@ class DataBaseSQL extends GlobalVariables {
 
 class DataBaseTXT extends GlobalVariables {
     public static void dataBaseTXT(){
-        deleteFile();
 
-        createFile();
+        /* deleteFile(); */ createFile();
 
         if (factorySettings()){
             writeFileToProcedureList("Массаж", "Понедельник", "13:00");
@@ -367,11 +370,22 @@ class DataBaseTXT extends GlobalVariables {
                 String[] weekDay = y.split("\\s+");
 
                 if (weekDay[1].equals(x)){
-                    list.add(weekDay[2] + " " + weekDay[0]);
+                    if (factorySettings()) {
+                        list.add(weekDay[2] + " " + weekDay[0]);
+                    }
+                    else{
+                        list.add(weekDay[0] + " " + weekDay[2]);
+                    }
                 }
             }
 
+            if (!factorySettings()){
+                procedureSchedule.put(x, list);
+                continue;
+            }
+
             Collections.sort(list);
+
 
             ArrayList <String> list2 = new ArrayList<>();
 
@@ -403,31 +417,296 @@ class DataBaseTXT extends GlobalVariables {
     }
 }
 
-public class Main {
+class DataBaseTXTv2 extends GlobalVariables {
+    public static void dataBaseTXTv2(String login){
+
+        /* deleteFile(login) */ createFile(login);
+    }
+
+    private static void deleteFile(String login){
+        new File(login + "_paid_procedure.txt").delete();
+    }
+
+    private static void createFile(String login){
+        try {
+            new File(login + "_paid_procedure.txt").createNewFile();
+
+        } catch (IOException e) {
+            System.out.println("Ошибка при создании файла");
+        }
+    }
+}
+
+public class Main extends GlobalVariables{
     public static void main(String[] args){
         DataBaseSQL.dataBaseSQL();
 
         DataBaseTXT.dataBaseTXT();
+
+        for (String x : userRoleLogin.get("client")) {
+            DataBaseTXTv2.dataBaseTXTv2(x);
+        }
+
+        SignIn.role();
+
+        SignIn.login();
+
+        switch (currentRole){
+            case "personal":
+                Personal.personal();
+                break;
+        }
+    }
+}
+
+class SignIn extends GlobalVariables{
+    public static void role(){
+        Scanner scan = new Scanner(System.in);
+
+        boolean running = true;
+        String role = "";
+
+        while (running) {
+            running = false;
+
+            System.out.println("\npersonal/director/manager/client");
+            System.out.print("Введите тип аккаунта: ");
+
+            role = scan.next();
+
+            switch (role){
+                case "personal": break;
+                case "director": break;
+                case "manager": break;
+                case "client": break;
+                default:
+                    running = true;
+                    System.out.println("Неправильный тип аккаунта, повторите.");
+            }
+        }
+        currentRole = role;
+    }
+
+    public static void login(){
+        Scanner scan = new Scanner(System.in);
+
+        System.out.print("Логин: ");
+        String login = scan.next();
+
+        System.out.print("Пароль: ");
+        String password = scan.next();
+
+        if (!loginPasswordProof(login, password)){
+            System.out.println("Неправильный логин или пароль.");
+            System.exit(0);
+        }
+        currentLogin = login;
+    }
+
+    private static boolean loginPasswordProof(String login, String password){
+        return userRoleLogin.get(currentRole).contains(login) && userLoginPassword.get(login).equals(password);
     }
 }
 
 class similarUserMethods extends DataBaseSQL {
-    public static void procedureSchedule(){
-        ArrayList <String> weekDays = new ArrayList<>();
+    public static void anyKeyMethod(Boolean anyKey){
+        Scanner scan = new Scanner(System.in);
+        if (anyKey){
+            System.out.print("\nНажмите любую клавишу чтобы продолжить. ");
+            scan.nextLine();
+        }
+    }
 
-        weekDays.add("Понедельник");
-        weekDays.add("Вторник");
-        weekDays.add("Среда");
-        weekDays.add("Четверг");
-        weekDays.add("Пятница");
+    public static void listOfProcedures() {
+
+    }
+
+    public static void searchClientOrMyInfo(String login, Boolean search){
+        Scanner scan = new Scanner(System.in);
+
+        if (search){
+            while (true) {
+                System.out.print("\nВведите логин посетителя, которого хотите найти: ");
+                login = scan.next();
+
+                if (clientLoginId.get(login) != null){
+                    break;
+                }
+                System.out.println("Посетитель с логином '" + login + "' не найден, повторите.");
+            }
+        }
+
+        String query = "SELECT * FROM clients WHERE login = ?";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             PreparedStatement pstmt = conn.prepareStatement(query)) {
+
+            pstmt.setString(1, login);
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()){
+                    int id = rs.getInt("id");
+                    String name = rs.getString("name");
+                    String surname = rs.getString("surname");
+                    int height = rs.getInt("height");
+                    int weight = rs.getInt("weight");
+                    int bloodType = rs.getInt("bloodType");
+                    String dateOfBirth = rs.getString("dateOfBirth");
+
+                    System.out.println("\nПосетитель найден:");
+                    System.out.println("ID: " + id);;
+                    System.out.println("Имя: " + name);
+                    System.out.println("Фамилия: " + surname);
+                    System.out.println("Рост: " + height + " см");
+                    System.out.println("Вес: " + weight + " кг");
+                    System.out.println("Группа крови: " + bloodType);
+                    System.out.println("Дата рождения: " + dateOfBirth);
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Ошибка при поиске посетителя: " + e.getMessage());
+        }
+    }
+
+    public static void allProcedures(){
+        String sql = "SELECT * FROM procedures";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL);
+             Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+            System.out.println("\nВсе процедуры:");
+
+            while (rs.next()) {
+                String title = rs.getString("title");
+                int cost = rs.getInt("cost");
+
+                System.out.println(title + " - " + cost + ".00 сом");
+            }
+        } catch (SQLException e) {
+            System.err.println("Ошибка при чтении данных: " + e.getMessage());
+        }
+    }
+
+    public static void procedureSchedule(){
+        System.out.println("\nРасписание к процедурам:");
 
         for (String x : weekDays) {
-            System.out.println("\n" + x + ":");
+            System.out.println(x);
 
             for (String y : procedureSchedule.get(x)) {
                 System.out.println(y);
             }
-
         }
     }
-}k
+}
+
+class Personal extends GlobalVariables{
+    public static void personal(){
+        Scanner scan = new Scanner(System.in);
+        System.out.println("\nПриветствую уважаемый Персонал!");
+
+        boolean running = true;
+        boolean anyKey = false;
+
+        while (running){
+            similarUserMethods.anyKeyMethod(anyKey);
+            anyKey = true;
+
+            System.out.println("\nМеню персонала:");
+
+            System.out.println("1. Показать список процедур");
+            System.out.println("2. Найти посетителя");
+            System.out.println("3. Показать все процедуры");
+            System.out.println("4. Показать расписание к процедурам");
+            System.out.println("5. Купить процедуру");
+            System.out.println("6. Найти процедуры");
+            System.out.println("0. Выход");
+
+            System.out.print("Выбор: ");
+
+            switch (scan.next()) {
+                case "1":
+                    similarUserMethods.listOfProcedures();
+                    break;
+                case "2":
+                    similarUserMethods.searchClientOrMyInfo("", true);
+                    break;
+                case "3":
+                    similarUserMethods.allProcedures();
+                    break;
+                case "4":
+                    similarUserMethods.procedureSchedule();
+                    break;
+                case "5":
+                    buyProcedure();
+                    break;
+                case "6":
+                    findProcedure();
+                    break;
+                case "0":
+                    running = false;
+                    System.out.println("\nПрограмма завершена, мы будем рады вашему возвращению!");
+                    break;
+                default:
+                    System.out.println("\nНеверный выбор, повторите.");
+            }
+        }
+    }
+
+    private static void buyProcedure(){
+        Scanner scan = new Scanner(System.in);
+
+        String login;
+
+        while (true) {
+            System.out.print("\nВведите логин посетителя, которому хотите купить процедуру: ");
+            login = scan.next();
+
+            if (clientLoginId.get(login) != null){
+                break;
+            }
+            System.out.println("Посетитель с логином '" + login + "' не найден, повторите.");
+        }
+
+        String title;
+
+        while (true){
+            System.out.print("\nВведите процедуру, которую хотите купить посетителю: ");
+            title = scan.next();
+
+            if (procedureTitleCost.get(title) != null){
+                break;
+            }
+            System.out.println("Процедура с названием '" + title + "' не найдено, повторите.");
+        }
+
+        if (paidProcedureList.get(login) == null){
+            ArrayList <String> AL = new ArrayList<>();
+            AL.add(title + " " + procedureTitleCost.get(title));
+
+            paidProcedureList.put(login, AL);
+        }
+        else{
+            paidProcedureList.get(login).add(title + " " + procedureTitleCost.get(title));
+        }
+
+        try {
+            FileWriter fileWriter = new FileWriter(login + "_paid_procedure.txt");
+            BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
+
+            for (String x : paidProcedureList.get(login)){
+                bufferedWriter.write(x);
+                bufferedWriter.newLine();
+            }
+            bufferedWriter.close();
+
+        } catch (IOException e) {
+            System.out.println("Ошибка при записи в файл");
+        }
+
+        System.out.println("Покупка процедуры прошла успешно!");
+    }
+
+    private static void findProcedure(){
+
+    }
+}
