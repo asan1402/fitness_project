@@ -34,7 +34,7 @@ class GlobalVariables {
     public static HashMap <String, ArrayList <String> > paidProcedureLists = new HashMap<>();
     public static HashMap <String, ArrayList <String> > paidProcedureTitleClients = new HashMap<>();
     public static HashMap <String, Integer> paidProcedureTitleCount = new HashMap<>();
-    public static HashMap <String, Integer> paidProcedureClientCount = new HashMap<>();
+    public static HashMap <String, ArrayList <String> > paidProcedureClientVisit = new HashMap<>();
 
     /* Data Base Time */
     public static String currentTime;
@@ -499,12 +499,15 @@ class DataBaseTXTv2 extends GlobalVariables {
                     paidProcedureLists.get(login).add(line);
                 }
 
-                if (DataBaseTime.visitPassed(line.split("\\s")[3])) {
-                    if (paidProcedureClientCount.get(login) == null) {
-                        paidProcedureClientCount.put(login, 1);
+                if (DataBaseTime.visitPassed(line.split("\\s")[5])) {
+                    if (paidProcedureClientVisit.get(login) == null) {
+                        ArrayList <String> AL = new ArrayList<>();
+                        AL.add(line);
+
+                        paidProcedureClientVisit.put(login, AL);
                     }
                     else {
-                        paidProcedureClientCount.put(login, paidProcedureClientCount.get(login) + 1);
+                        paidProcedureClientVisit.get(login).add(line);
                     }
                 }
 
@@ -571,10 +574,12 @@ class DataBaseTime extends GlobalVariables{
     }
 
     public static String insertDateToPaidProcedure(String paidProcedureWeekDayAndTimeDate){
-        String time = paidProcedureWeekDayAndTimeDate.split("\\s")[0];
+        String weekDay = paidProcedureWeekDayAndTimeDate.split("\\s")[0];
 
         int currentMinutes = 1440 * weekDayOrder(currentWeekDay);
-        int minutes = 1440 * weekDayOrder(time);
+        int minutes = 1440 * weekDayOrder(weekDay);
+
+        String time = paidProcedureWeekDayAndTimeDate.split("\\s")[1];
 
         currentMinutes += timeInMinutes(currentTime);
         minutes += timeInMinutes(time);
@@ -582,16 +587,16 @@ class DataBaseTime extends GlobalVariables{
         int difference;
 
         if (currentMinutes >= minutes){
-            difference = weekDayOrder(currentWeekDay) + 7 - weekDayOrder(time);
+            difference = weekDayOrder(currentWeekDay) + 7 - weekDayOrder(weekDay);
         }
         else{
-            difference = weekDayOrder(time) - weekDayOrder(currentWeekDay);
+            difference = weekDayOrder(weekDay) - weekDayOrder(currentWeekDay);
         }
 
         return currentDateMethod(difference);
     }
 
-    private static int weekDayOrder(String weekDay){
+    public static int weekDayOrder(String weekDay){
         return switch (weekDay) {
             case "Понедельник" -> 1;
             case "Вторник" -> 2;
@@ -654,13 +659,9 @@ class DataBaseTime extends GlobalVariables{
     }
 
     public static boolean visitPassed(String date){
-        String currentYear = currentDate.substring(0, 4);
-        String currentMonth = currentDate.substring(5, 7);
-        String currentDay = currentDate.substring(8);
-
-        int currentDateSize = Integer.parseInt(currentDay);
-        currentDateSize += Integer.parseInt(currentMonth) * 30;
-        currentDateSize += Integer.parseInt(currentYear) * 365;
+        int currentDateSize = (currentDay == null ? 0 : Integer.parseInt(currentDay));
+        currentDateSize += (currentMonth == null ? 0 : Integer.parseInt(currentMonth) * 30);
+        currentDateSize += (currentYear == null ? 0 : Integer.parseInt(currentYear) * 365);
 
         String year = date.substring(0, 4);
         String month = date.substring(5, 7);
@@ -671,6 +672,18 @@ class DataBaseTime extends GlobalVariables{
         dateSize += Integer.parseInt(year) * 365;
 
         return currentDateSize <= dateSize;
+    }
+
+    public static int theLastDateOfVisit(String time, String date){
+        String year = date.substring(0, 4);
+        String month = date.substring(5, 7);
+        String day = date.substring(8);
+
+        int dateSize = Integer.parseInt(day);
+        dateSize += Integer.parseInt(month) * 30;
+        dateSize += Integer.parseInt(year) * 365;
+
+        return 1440 * dateSize + timeInMinutes(time);
     }
 }
 
@@ -684,12 +697,12 @@ class similarUserMethods extends DataBaseSQL {
     }
 
     public static void listOfProcedures() {
-        if (paidProcedureTitleCount.isEmpty()){
+        if (paidProcedureTitleClients.isEmpty()){
             System.out.println("\nНикто из посетителей не покупал процедуры.");
             return;
         }
 
-        System.out.println("Список процедур:");
+        System.out.println("\nСписок процедур:");
 
         for (String x : procedureTitle){
             if (paidProcedureTitleClients.get(x) == null){
@@ -790,7 +803,7 @@ class similarUserMethods extends DataBaseSQL {
 
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
-            System.out.println("Список посетителей: ");
+            System.out.println("\nСписок посетителей: ");
 
             while (rs.next()) {
                 String login = rs.getString("login");
@@ -1398,7 +1411,7 @@ class Manager extends GlobalVariables {
         while (running){
             running = false;
 
-            System.out.println("\nЧто вы хотите изменить: ");
+            System.out.println("\nЧто хотите изменить: ");
 
             System.out.println("1. Время.");
             System.out.println("2. Название.");
@@ -1407,13 +1420,82 @@ class Manager extends GlobalVariables {
 
             switch (scan.next()){
                 case "1":
-                    System.out.print("\nВведите новое время для процедуры: ");
-                    String newTime = scan.next();
+                    boolean running2 = true;
 
-                    similarCondition(title, newTime, true);
+                    while (running2) {
+                        running2 = false;
 
-                    System.out.println("\nВремя процедуры успешно изменена! ");
+                        System.out.println("\nИзменение времени: ");
+
+                        System.out.println("1. Добавить время.");
+                        System.out.println("2. Удалить время.");
+
+                        System.out.print("Ваш выбор: ");
+
+                        switch (scan.next()) {
+                            case "1":
+                                String weekDay;
+
+                                while (true){
+                                    System.out.print("\nВведите день недели: ");
+                                    weekDay = scan.next();
+
+                                    if (DataBaseTime.weekDayOrder(weekDay) > 0){
+                                        break;
+                                    }
+                                    System.out.println("День недели введен неправильно, повторите.");
+                                }
+
+                                System.out.print("\nВведите время: ");
+                                String time = scan.next();
+
+                                DataBaseTXT.writeFileToProcedureList(title, weekDay, time);
+
+                                System.out.println("\nВремя успешно добавлено!");
+
+                                break;
+
+                            case "2":
+                                while (true) {
+                                    System.out.println("\nВыберите из расписание время что вы хотите удалить.");
+                                    System.out.println("Расписание процедуры '" + title + "':");
+
+                                    int cnt = 0;
+                                    for (String x : procedureWeekDayAndTime.get(title)) {
+                                        System.out.println(++cnt + ". " + x);
+                                    }
+
+                                    System.out.print("Ваш выбор: ");
+                                    int choose = scan.nextInt();
+
+                                    if (choose > 0 && choose <= cnt){
+                                        String weekDay2 = procedureWeekDayAndTime.get(title).get(choose-1).split("\\s")[0];
+                                        String time2 = procedureWeekDayAndTime.get(title).get(choose-1).split("\\s")[1];
+
+                                        System.out.println(title + " " + weekDay2 + " " + time2);
+                                        procedureLists.remove(title + " " + procedureWeekDayAndTime.get(title).get(choose-1) + " ");
+                                        procedureSchedule.get(weekDay2).remove(title + " " + time2 + " ");
+                                        procedureWeekDayAndTime.get(title).remove(choose-1);
+
+                                        break;
+                                    }
+                                    else{
+                                        System.out.println("Неправильный выбор, повторите.");
+                                    }
+                                }
+
+                                System.out.println("\nВремя успешно удалено!");
+
+                                break;
+
+                            default:
+                                running2 = true;
+                                System.out.println("Неправльный выбор, повторите.");
+                        }
+                    }
+
                     break;
+
                 case "2":
                     String newTitle;
 
@@ -1444,43 +1526,32 @@ class Manager extends GlobalVariables {
                     procedureTitleCost.put(newTitle, procedureTitleCost.get(title));
                     procedureTitleCost.remove(title);
 
-                    similarCondition(title, newTitle, false);
+                    for (int i=0; i<procedureLists.size(); ++i){
+                        String[] list = procedureLists.get(i).split("\\s");
+
+                        if (!list[0].equals(title)){
+                            continue;
+                        }
+                        procedureLists.set(i, newTitle + " " + list[1] + " " + list[2]);
+                    }
+
+                    DataBaseTXT.readFile();
+
+                    procedureSchedule.clear();
+                    DataBaseTXT.insertToProcedureSchedule();
+
+                    procedureWeekDayAndTime.clear();
+                    DataBaseTXT.insertToProcedureWeekDayAndTime();
 
                     System.out.println("\nНазвание процедуры успешно изменена! ");
 
                     break;
+
                 default:
                     running = true;
                     System.out.println("Неправильный выбор, повторите.");
             }
         }
-    }
-
-    private static void similarCondition(String title, String newWhat, boolean isTime){
-        for (int i=0; i<procedureLists.size(); ++i){
-            String[] list = procedureLists.get(i).split("\\s");
-
-            if (!list[0].equals(title)){
-                continue;
-            }
-
-            if (isTime) {
-                procedureLists.set(i, list[0] + " " + list[1] + " " + newWhat);
-            }
-            else{
-                procedureLists.set(i, newWhat + " " + list[1] + " " + list[2]);
-            }
-        }
-
-        DataBaseTXT.readFile();
-
-        procedureSchedule.clear();
-
-        DataBaseTXT.insertToProcedureSchedule();
-
-        procedureWeekDayAndTime.clear();
-
-        DataBaseTXT.insertToProcedureWeekDayAndTime();
     }
 
     private static void clientWithMaxVisits(){
@@ -1490,7 +1561,7 @@ class Manager extends GlobalVariables {
         String clientLogin = "";
 
         for (String x : userRoleLogins.get("client")){
-            int cnt = paidProcedureClientCount.get(x);
+            int cnt = (paidProcedureClientVisit.get(x) == null ? 0 : paidProcedureClientVisit.get(x).size());
             if (mx < cnt){
                 mx = cnt;
                 clientLogin = x;
@@ -1507,7 +1578,7 @@ class Manager extends GlobalVariables {
         String clientLogin = "";
 
         for (String x : userRoleLogins.get("client")){
-            int cnt = paidProcedureClientCount.get(x);
+            int cnt = (paidProcedureClientVisit.get(x) == null ? 0 : paidProcedureClientVisit.get(x).size());
             if (mn > cnt){
                 mn = cnt;
                 clientLogin = x;
@@ -1568,10 +1639,29 @@ class Client extends GlobalVariables {
     }
 
     private static void historyOfVisit(){
+        System.out.println("\nИстория посещения: ");
 
+        for (String x : paidProcedureClientVisit.get(currentLogin)){
+            System.out.println(x);
+        }
     }
 
     private static void theLastDateOfVisit(){
+        System.out.print("\nПоследняя история посещения: ");
 
+        int mx = 0;
+        String line = "";
+
+        for (String x : paidProcedureClientVisit.get(currentLogin)){
+            String date = x.split("\\s")[5];
+            String time = x.split("\\s")[4];
+
+            if (mx < DataBaseTime.theLastDateOfVisit(time, date)){
+                mx = DataBaseTime.theLastDateOfVisit(time, date);
+                line = x;
+            }
+        }
+
+        System.out.println(line);
     }
 }
